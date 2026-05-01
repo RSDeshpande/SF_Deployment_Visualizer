@@ -3,56 +3,63 @@ name: Deploy to Salesforce
 on:
   push:
     branches: [main]
-  pull_request:
-    types: [closed]
-    branches: [main]
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # fixes the Node.js warning
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      pull-requests: read
+
     steps:
-      # Step 1 - Checkout code (upgraded to v4)
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 2 - Setup Node.js 24 explicitly (fixes deprecation warning)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # Step 3 - Install SF CLI properly and verify
       - name: Install Salesforce CLI
         run: |
           npm install -g @salesforce/cli@latest
-          sf --version    # this will confirm sf is available
+          sf --version
 
-      # Step 4 - Write JWT key from GitHub Secret to file
+      - name: Validate secrets
+        run: |
+          echo "Checking secrets..."
+          [ -z "${{ secrets.SF_CLIENT_ID }}" ] && echo "❌ SF_CLIENT_ID missing" || echo "✅ SF_CLIENT_ID set"
+          [ -z "${{ secrets.SF_USERNAME }}" ] && echo "❌ SF_USERNAME missing" || echo "✅ SF_USERNAME set"
+          [ -z "${{ secrets.SF_JWT_KEY }}" ]  && echo "❌ SF_JWT_KEY missing"  || echo "✅ SF_JWT_KEY set"
+          [ -z "${{ secrets.SF_ORG_URL }}" ]  && echo "❌ SF_ORG_URL missing"  || echo "✅ SF_ORG_URL set"
+
       - name: Write JWT key
         run: |
           echo "${{ secrets.SF_JWT_KEY }}" > server.key
           chmod 600 server.key
+          head -1 server.key
 
-      # Step 5 - Authenticate to Salesforce using JWT
       - name: Authenticate to Salesforce
         run: |
           sf org login jwt \
             --client-id "${{ secrets.SF_CLIENT_ID }}" \
             --jwt-key-file server.key \
             --username "${{ secrets.SF_USERNAME }}" \
-            --instance-url "${{ secrets.SF_ORG_URL }}" \
-            --alias myorg
+            --instance-url "https://login.salesforce.com" \
+            --alias myorg \
+            --set-default
 
-      # Step 6 - Verify connection
       - name: Verify org connection
         run: sf org display --target-org myorg
 
-      # Step 7 - Deploy metadata (only if force-app folder exists)
-      - name: Deploy to Salesforce org
+      - name: Deploy to Salesforce
         run: |
           if [ -d "force-app" ]; then
             sf project deploy start \
@@ -60,10 +67,9 @@ jobs:
               --target-org myorg \
               --json | tee deploy_result.json
           else
-            echo "No force-app directory found — skipping deploy"
+            echo "⚠️ No force-app folder found — skipping deploy"
           fi
 
-      # Step 8 - Cleanup key file for security
       - name: Cleanup
         if: always()
         run: rm -f server.key
