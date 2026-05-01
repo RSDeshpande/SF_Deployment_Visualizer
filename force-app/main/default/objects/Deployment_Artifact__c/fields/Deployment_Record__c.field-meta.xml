@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Deployment_Record__c</fullName>
+    <label>Deployment Record</label>
+    <referenceTo>Deployment_Record__c</referenceTo>
+    <relationshipLabel>Deployment Artifacts</relationshipLabel>
+    <relationshipName>Deployment_Artifacts</relationshipName>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <trackHistory>false</trackHistory>
+    <type>Lookup</type>
+</CustomField>

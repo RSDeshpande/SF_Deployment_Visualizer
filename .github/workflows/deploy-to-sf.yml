@@ -60,16 +60,46 @@ jobs:
         run: sf org display --target-org myorg
 
       - name: Deploy to Salesforce
+        id: deploy
         run: |
-          if [ -d "force-app" ]; then
-            sf project deploy start \
-              --source-dir force-app \
-              --target-org myorg \
-              --json | tee deploy_result.json
-          else
-            echo "⚠️ No force-app folder found — skipping deploy"
-          fi
+          set +e  # Don't exit on error
+          sf project deploy start \
+            --source-dir force-app \
+            --target-org myorg \
+            --json > deploy_result.json 2>&1
+          DEPLOY_EXIT_CODE=$?
+          echo "DEPLOY_EXIT_CODE=$DEPLOY_EXIT_CODE" >> $GITHUB_ENV
+          set -e
+
+      - name: Get Salesforce access token
+        id: sf_auth
+        run: |
+          SF_DISPLAY=$(sf org display --target-org myorg --json)
+          echo "SF_ACCESS_TOKEN=$(echo $SF_DISPLAY | jq -r '.result.accessToken')" >> $GITHUB_ENV
+          echo "SF_INSTANCE_URL=$(echo $SF_DISPLAY | jq -r '.result.instanceUrl')" >> $GITHUB_ENV
+
+      - name: Send deployment webhook to Salesforce
+        if: always()
+        env:
+          SF_ACCESS_TOKEN: ${{ env.SF_ACCESS_TOKEN }}
+          SF_INSTANCE_URL: ${{ env.SF_INSTANCE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          REPO_URL: https://github.com/${{ github.repository }}
+          DEPLOY_RESULT_PATH: ./deploy_result.json
+        run: node scripts/send-deployment-webhook.js
 
       - name: Cleanup
         if: always()
         run: rm -f server.key
+
+      - name: Fail if deployment failed
+        if: always()
+        run: |
+          if [ "${{ env.DEPLOY_EXIT_CODE }}" != "0" ]; then
+            echo "❌ Salesforce deployment failed"
+            exit 1
+          fi
