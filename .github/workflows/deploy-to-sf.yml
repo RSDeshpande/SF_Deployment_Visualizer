@@ -2,29 +2,30 @@ name: Deploy to Salesforce
 on:
   push:
     branches:
-      - main  # This starts the "recipe" when you push to main
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1. Get the code from your GitHub repo
       - name: 'Checkout source code'
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # 2. Install the Salesforce tool
+      # Use Node.js 24 to avoid the deprecation warning in your screenshot
+      - name: 'Setup Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: 'Install Salesforce CLI'
         run: npm install -g @salesforce/cli
 
-      # 3. Log into Salesforce using the Secret you added earlier
       - name: 'Authenticate to Salesforce'
         run: |
           echo "${{ secrets.SFDX_AUTH_URL }}" > sfdx_auth.txt
-          sf org login auth sfdx-url-file -f sfdx_auth.txt -a devOrg -d
+          # Using 'npx sf' ensures the runner finds the locally installed CLI
+          npx sf org login auth sfdx-url-file -f sfdx_auth.txt -a devOrg -d
 
-      # 4. Push the code to your Org
       - name: 'Deploy to Salesforce'
         run: |
-          sf project deploy start --target-org devOrg --description "Automated Deploy from GitHub"
+          npx sf project deploy start --target-org devOrg --description "Automated Deploy from GitHub"
