@@ -8,5 +8,6 @@ public with sharing class Hello {
     
     public static void testNewClassDploy(){
         System.debug('Hello, world!');
+        System.debug('Deploy Test Debug');
     }
 }
